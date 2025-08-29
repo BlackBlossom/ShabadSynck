@@ -21,6 +21,7 @@ export default function LivePage() {
   const setActive  = useLyricsStore((s) => s.setActive);
   const loadLrc    = useLyricsStore((s) => s.loadLrc);
   const clearLyrics = useLyricsStore((s) => s.clear);
+  const clearLiveData = useLyricsStore((s) => s.clearLiveData);
   const highlightMatchingWords = useLyricsStore((s) => s.highlightMatchingWords);
   const importedLyrics = useLyricsStore((s) => s.importedLyrics);
   const hasImportedLyrics = useLyricsStore((s) => s.hasImportedLyrics);
@@ -53,8 +54,9 @@ export default function LivePage() {
       hasImportedLyrics
     });
     
-    // Clean up stale imported lyrics if they exist without proper user action
-    if (hasImportedLyrics && (!importedLyrics || importedLyrics.length === 0)) {
+    // Only clean up if we have the flag but no actual data AND no cues
+    // This prevents clearing imported lyrics that are properly loaded
+    if (hasImportedLyrics && (!importedLyrics || importedLyrics.length === 0) && cues.length === 0) {
       console.log('🧹 Cleaning up stale imported lyrics state');
       clearLyrics();
     }
@@ -162,6 +164,8 @@ export default function LivePage() {
             } else {
               console.log('⚠️ No match found in imported lyrics');
             }
+            // Don't call updateLyricsFromTranscript when we have imported lyrics
+            // The highlightMatchingWords function handles the highlighting
           } else {
             // No imported lyrics - use live transcription mode
             console.log('🎵 No imported lyrics - using live transcription mode');
@@ -240,6 +244,7 @@ export default function LivePage() {
                     if (match) {
                       console.log('✅ Polling: Found word match in imported lyrics:', match);
                     }
+                    // Don't call updateLyricsFromTranscript when we have imported lyrics
                   } else {
                     console.log('🎵 Polling: Using live transcription mode');
                     updateLyricsFromTranscript(allWords, allWords.length - 1);
@@ -468,20 +473,16 @@ export default function LivePage() {
         // Reset session counters when starting new recording
         processedResultsCount.current = 0;
         lastProcessedCount.current = 0; // Reset polling counter
+        // Reset speech-related state
         setAllFinalTranscripts([]);
         setTranscriptWords([]);
         setTranscript('');
         setInterimText('');
         
-        // Only clear lyrics if no imported lyrics, otherwise just reset active word
-        if (!importedLyrics || importedLyrics.length === 0) {
-          clearLyrics(); // Clear lyrics store
-        } else {
-          // Keep imported lyrics but reset active word
-          useLyricsStore.getState().setActive(null, null);
-        }
+        // Clear live data but preserve imported lyrics
+        clearLiveData();
         
-        console.log('🎬 Starting new recording session - cleared speech data, kept imported lyrics');
+        console.log('🎬 Starting new recording session - cleared speech data, preserved imported lyrics');
         
         await start();
         console.log('Microphone started');

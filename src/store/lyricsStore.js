@@ -148,6 +148,24 @@ export const useLyricsStore = create(
         hasImportedLyrics: false
       }),
 
+      // Clear only live transcription data while keeping imported lyrics
+      clearLiveData: () => {
+        const state = get();
+        if (state.hasImportedLyrics && state.importedLyrics) {
+          // Keep imported lyrics, just reset active word
+          set({ active: { lineId: null, wordId: null } });
+        } else {
+          // No imported lyrics, clear everything
+          set({ 
+            cues: [], 
+            meta: {}, 
+            active: { lineId: null, wordId: null },
+            importedLyrics: null,
+            hasImportedLyrics: false
+          });
+        }
+      },
+
       setActive: (lineId, wordId) =>
         set({ active: { lineId, wordId } }),
 
