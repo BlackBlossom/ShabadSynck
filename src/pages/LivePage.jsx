@@ -14,18 +14,6 @@ import useSpeechStream   from "../hooks/useSpeechStream";
 import { useLyricsStore } from "../store/lyricsStore";
 import speechClientInstance from "../api/speechClient";
 
-/* animate three rings; amplitude injected via CSS var */
-const ring = (i) => ({
-  scale: [0.8, 2.6],
-  opacity: [0.9, 0],
-  transition: {
-    duration: 1.2,
-    ease: "easeOut",
-    repeat: Infinity,
-    delay: i * 0.4,
-  },
-});
-
 export default function LivePage() {
   /* lyrics store */
   const cues       = useLyricsStore((s) => s.cues);
@@ -90,8 +78,7 @@ export default function LivePage() {
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [transcriptWords, setTranscriptWords] = useState([]);
-  const ringCtrl = useAnimation();
-  const analyserRef = useRef(null);      // for amplitude ↔️ CSS var
+  const analyserRef = useRef(null);      // for speech detection
   
   // Add a state to accumulate all final transcripts
   const [allFinalTranscripts, setAllFinalTranscripts] = useState([]);
@@ -101,6 +88,9 @@ export default function LivePage() {
 
   // Add a ref to track last processed count
   const lastProcessedCount = useRef(0);
+  
+  // Add debounce timer for lyrics updates to prevent flashing
+  const lyricsUpdateTimer = useRef(null);
 
   const languages = [
     { code: 'english', name: 'English', flag: '🇺🇸' },
@@ -110,6 +100,16 @@ export default function LivePage() {
 
   /* hooks */
   const { importFile } = useImportedLyrics();
+  
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (lyricsUpdateTimer.current) {
+        clearTimeout(lyricsUpdateTimer.current);
+      }
+    };
+  }, []);
+  
   const { 
     start, 
     stop, 
@@ -192,12 +192,9 @@ export default function LivePage() {
             console.log('🎯 Interim match found:', match);
           }
         } else {
-          // For live transcription, highlight interim words as before
-          const allWords = [...transcriptWords];
-          const interimWords = result.transcript.trim().split(/\s+/).filter(word => word.length > 0);
-          console.log('📝 Interim words for live transcription:', interimWords);
-          console.log('🎵 Updating lyrics with interim preview:', [...allWords, ...interimWords]);
-          updateLyricsFromTranscript([...allWords, ...interimWords], allWords.length);
+          // For live transcription - don't update lyrics during interim
+          // Only show final results to prevent confusing display behavior
+          console.log('📝 Interim words for live transcription - not updating display');
         }
       }
     }
@@ -269,18 +266,28 @@ export default function LivePage() {
 
   /* Convert transcript words into lyrics format and update store */
   const updateLyricsFromTranscript = (words, highlightFromIndex = words.length - 1) => {
-    console.log('🎵 updateLyricsFromTranscript called:', {
-      totalWords: words.length,
-      highlightFromIndex,
-      wordsPreview: words.slice(-5), // Show last 5 words
-      allWords: words
-    });
+    if (import.meta.env.DEV) {
+      console.log('🎵 updateLyricsFromTranscript called:', {
+        totalWords: words.length,
+        highlightFromIndex,
+        wordsPreview: words.slice(-5), // Show last 5 words
+        allWords: words
+      });
+    }
 
     if (words.length === 0) {
-      console.log('⚠️ No words to process, skipping lyrics update');
+      if (import.meta.env.DEV) {
+        console.log('⚠️ No words to process, skipping lyrics update');
+      }
       return;
     }
 
+    // Always show all accumulated words - no more resetting
+    performLyricsUpdate(words, highlightFromIndex);
+  };
+
+  /* Actual lyrics update function (debounced) */
+  const performLyricsUpdate = (words, highlightFromIndex) => {
     // Create lyrics lines (group words by lines, ~8-10 words per line)
     const wordsPerLine = 8;
     const lines = [];
@@ -298,28 +305,34 @@ export default function LivePage() {
       });
     }
 
-    console.log('📝 Generated lyrics lines:', {
-      totalLines: lines.length,
-      linesPreview: lines.map(line => ({
-        id: line.id,
-        wordCount: line.words.length,
-        text: line.words.map(w => w.text).join(' ')
-      }))
-    });
+    if (import.meta.env.DEV) {
+      console.log('📝 Generated lyrics lines:', {
+        totalLines: lines.length,
+        linesPreview: lines.map(line => ({
+          id: line.id,
+          wordCount: line.words.length,
+          text: line.words.map(w => w.text).join(' ')
+        }))
+      });
+    }
 
     // Determine which word should be highlighted
     const activeLineIndex = Math.floor(highlightFromIndex / wordsPerLine);
     const activeWordIndexInLine = highlightFromIndex % wordsPerLine;
     
-    console.log('🎯 Active word position:', {
-      highlightFromIndex,
-      activeLineIndex,
-      activeWordIndexInLine,
-      totalLines: lines.length
-    });
+    if (import.meta.env.DEV) {
+      console.log('🎯 Active word position:', {
+        highlightFromIndex,
+        activeLineIndex,
+        activeWordIndexInLine,
+        totalLines: lines.length
+      });
+    }
 
     // Update lyrics store
-    console.log('📋 Updating lyrics store with new data...');
+    if (import.meta.env.DEV) {
+      console.log('📋 Updating lyrics store with new data...');
+    }
     const lyricsData = {
       meta: { 
         ti: 'Live Transcription',
@@ -330,35 +343,45 @@ export default function LivePage() {
       isImported: false  // This is live transcription, not imported lyrics
     };
     
-    console.log('📋 Lyrics data to store:', {
-      meta: lyricsData.meta,
-      cuesCount: lyricsData.cues.length,
-      cuesPreview: lyricsData.cues.slice(0, 2)
-    });
+    if (import.meta.env.DEV) {
+      console.log('📋 Lyrics data to store:', {
+        meta: lyricsData.meta,
+        cuesCount: lyricsData.cues.length,
+        cuesPreview: lyricsData.cues.slice(0, 2)
+      });
+    }
     
     loadLrc(lyricsData);
 
-    console.log('✅ Lyrics store updated successfully');
-    console.log('📊 Post-update store state:', {
-      cues: useLyricsStore.getState().cues.length,
-      active: useLyricsStore.getState().active
-    });
+    if (import.meta.env.DEV) {
+      console.log('✅ Lyrics store updated successfully');
+      console.log('📊 Post-update store state:', {
+        cues: useLyricsStore.getState().cues.length,
+        active: useLyricsStore.getState().active
+      });
+    }
 
     // Set active word
     if (highlightFromIndex >= 0 && highlightFromIndex < words.length) {
       const lineId = Math.floor(highlightFromIndex / wordsPerLine);
       const wordId = highlightFromIndex;
       
-      console.log('🎯 Setting active word:', {
-        lineId,
-        wordId,
-        word: words[highlightFromIndex]
-      });
+      if (import.meta.env.DEV) {
+        console.log('🎯 Setting active word:', {
+          lineId,
+          wordId,
+          word: words[highlightFromIndex]
+        });
+      }
       
       setActive(lineId, wordId);
-      console.log('✅ Active word set successfully');
+      if (import.meta.env.DEV) {
+        console.log('✅ Active word set successfully');
+      }
     } else {
-      console.log('⚠️ Highlight index out of bounds, not setting active word');
+      if (import.meta.env.DEV) {
+        console.log('⚠️ Highlight index out of bounds, not setting active word');
+      }
     }
     
     setCurrentWordIndex(highlightFromIndex);
@@ -369,25 +392,23 @@ export default function LivePage() {
     setConnectionStatus(status);
   }, [status]);
 
-  /* start/stop wave anim */
+  /* Speech detection indicator - replace ugly waves with clean indicator */
+  const [speechDetected, setSpeechDetected] = useState(false);
   useEffect(() => {
-    if (isStreaming) {
-      ringCtrl.start((i) => ring(i));
-    } else {
-      ringCtrl.stop();
+    if (!isStreaming) {
+      setSpeechDetected(false);
+      return;
     }
-  }, [isStreaming, ringCtrl]);
-
-  /* amplitude CSS variable for ring thickness */
-  useEffect(() => {
-    if (!isStreaming) return;
-    const node = analyserRef.current;
-    if (!node) return;
 
     const id = setInterval(() => {
-      const amp = window.latestAmplitude || 0.1;  // set inside useSpeechStream
-      node.style.setProperty("--amp", (amp * 8).toFixed(2) + "px");
-    }, 60);
+      const amp = window.latestAmplitude || 0;
+      
+      // Detect actual speech above noise floor
+      const noiseFloor = 0.02;
+      const isSpeaking = amp > noiseFloor;
+      
+      setSpeechDetected(isSpeaking);
+    }, 100); // Check every 100ms
 
     return () => clearInterval(id);
   }, [isStreaming]);
@@ -560,10 +581,18 @@ export default function LivePage() {
 
       {/* ─── QUICK STATUS INDICATOR ─── */}
       <div className="flex items-center gap-2 text-sm text-gray-400 mb-4">
-        <div className={`w-2 h-2 rounded-full ${isStreaming ? 'bg-red-500 animate-pulse' : 'bg-gray-500'}`}></div>
+        <div className={`w-2 h-2 rounded-full ${
+          isStreaming 
+            ? speechDetected 
+              ? 'bg-[#1DB954] animate-pulse' 
+              : 'bg-orange-400'
+            : 'bg-gray-500'
+        }`}></div>
         <span>
           {isStreaming 
-            ? `Recording (${languages.find(lang => lang.code === selectedLanguage)?.name})`
+            ? speechDetected
+              ? `Detecting speech (${languages.find(lang => lang.code === selectedLanguage)?.name})`
+              : `Listening (${languages.find(lang => lang.code === selectedLanguage)?.name})`
             : 'Ready to record'
           }
         </span>
@@ -575,19 +604,31 @@ export default function LivePage() {
         )}
       </div>
 
-      {/* ─── MIC WITH REACTIVE WAVES ─── */}
-      <div className="relative mb-8" ref={analyserRef}>
-        {/* Animated rings - only show when recording */}
-        {isStreaming && [0, 1, 2].map((i) => (
-          <motion.span
-            key={i}
-            custom={i}
-            initial={{ opacity: 0 }}
-            animate={ringCtrl}
-            style={{ borderWidth: "var(--amp,2px)" }}
-            className="absolute inset-0 rounded-full border border-[#1DB954]"
-          />
-        ))}
+      {/* ─── MIC WITH SPEECH DETECTION ─── */}
+      <div className="relative mb-8">
+        {/* Clean speech detection indicator */}
+        {isStreaming && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            {/* Outer ring - always visible when recording */}
+            <div className="absolute w-32 h-32 rounded-full border-2 border-[#1DB954]/30"></div>
+            
+            {/* Inner pulse - only when speech detected */}
+            {speechDetected && (
+              <motion.div
+                className="absolute w-28 h-28 rounded-full bg-[#1DB954]/20 border border-[#1DB954]/50"
+                animate={{
+                  scale: [1, 1.1, 1],
+                  opacity: [0.3, 0.6, 0.3]
+                }}
+                transition={{
+                  duration: 1,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+              />
+            )}
+          </div>
+        )}
 
         <motion.button
           whileHover={{ scale: 1.05 }}
@@ -599,7 +640,9 @@ export default function LivePage() {
           disabled={false} // Always allow clicking to check permissions
           className={`relative z-10 flex h-24 w-24 items-center justify-center rounded-full transition-all duration-300 ${
             isStreaming 
-              ? "bg-[#1DB954] shadow-lg shadow-[#1DB954]/50" 
+              ? speechDetected 
+                ? "bg-[#1DB954] shadow-lg shadow-[#1DB954]/50 scale-110" 
+                : "bg-[#1DB954] shadow-lg shadow-[#1DB954]/30"
               : permission === 'denied'
               ? "bg-red-500/20 hover:bg-red-500/40 border-2 border-red-500/50"
               : "bg-[#1A1A1A] hover:bg-[#2A2A2A]"
@@ -678,8 +721,8 @@ export default function LivePage() {
         )}
       </div>
 
-      {/* ─── TRANSCRIPT DISPLAY (SECONDARY) ─── */}
-      {(transcript || interimText) && (
+      {/* ─── TRANSCRIPT DISPLAY (SECONDARY) - Only show in development ─── */}
+      {(transcript || interimText) && import.meta.env.DEV && (
         <div className="mt-6 w-full max-w-[900px] px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
