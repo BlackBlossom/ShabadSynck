@@ -1,1 +1,51 @@
- @import "tailwindcss";
+@import "tailwindcss";
+
+/* -------  Design tokens  ------- */
+/* @theme {
+  /* wipe the default color scale (optional) 
+  --color-*: initial;
+
+  /* brand palette 
+  --color-brand:         #1DB954;   /* primary accent 
+  --color-bg-main:       #121212;   /* page background 
+  --color-bg-elevated:   #212121;   /* header / cards 
+  --color-text-secondary:#535353;   /* body copy 
+  --color-text-muted:    #B3B3B3;   /* helper text 
+
+  /* other tokens 
+  --radius-card: 0.75rem;
+  --max-width-page: 1140px;
+} */
+
+@theme {
+  --color-brand:#1DB954;
+  --color-bg-main:#121212;
+  --color-bg-elevated:#1A1A1A;
+  --color-text-muted:#8E8E8E;
+  --radius-card:14px;
+  --max-width-page:1200px;
+}
+
+@font-face {
+  font-family: 'Qurova';
+  src: url('./assets/Fonts/QurovaDEMO-Regular-BF67a5c637a5dc9.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-qurova {
+  font-family: 'Qurova', sans-serif;
+}
+
+@font-face {
+  font-family: 'Caldina Regular';
+  src: url('./assets/Fonts/CaldinaRegular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-caldina {
+  font-family: 'Caldina Regular', sans-serif;
+}
