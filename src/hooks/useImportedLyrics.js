@@ -24,7 +24,7 @@ export default function useImportedLyrics() {
         cuesPreview: parsed.cues.slice(0, 3)
       });
       
-      loadLrc(parsed);
+      loadLrc({ ...parsed, isImported: true });
       console.log('✅ LRC lyrics loaded to store');
     } else {
       console.log('📝 Detected plain text format, creating artificial timestamps');
@@ -48,7 +48,8 @@ export default function useImportedLyrics() {
 
       const artificialLrcData = {
         meta: { title: file.name },
-        cues: artificialCues
+        cues: artificialCues,
+        isImported: true
       };
 
       console.log('🎵 Created artificial LRC data:', {

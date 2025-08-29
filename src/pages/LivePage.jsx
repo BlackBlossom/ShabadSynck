@@ -38,12 +38,24 @@ export default function LivePage() {
   const hasImportedLyrics = useLyricsStore((s) => s.hasImportedLyrics);
   const location = useLocation();
 
+  // Initialize: Clear any stale state on mount
+  useEffect(() => {
+    console.log('🎬 LivePage mounted - checking for stale state');
+    const state = useLyricsStore.getState();
+    
+    // If we have hasImportedLyrics=true but no actual imported lyrics data, clear it
+    if (state.hasImportedLyrics && (!state.importedLyrics || state.importedLyrics.length === 0)) {
+      console.log('🧹 Found stale imported lyrics flag, clearing...');
+      clearLyrics();
+    }
+  }, []);
+
   // Debug: Log location changes
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [location.pathname]);
 
-  // Debug: Log store changes
+  // Debug: Log store changes and clean up stale imported lyrics
   useEffect(() => {
     console.log('🔄 LivePage re-rendered - Store state:', {
       cuesCount: cues.length,
@@ -52,7 +64,13 @@ export default function LivePage() {
       importedLyricsCount: importedLyrics ? importedLyrics.length : 0,
       hasImportedLyrics
     });
-  }, [cues, activeWord, importedLyrics, hasImportedLyrics]);
+    
+    // Clean up stale imported lyrics if they exist without proper user action
+    if (hasImportedLyrics && (!importedLyrics || importedLyrics.length === 0)) {
+      console.log('🧹 Cleaning up stale imported lyrics state');
+      clearLyrics();
+    }
+  }, [cues, activeWord, importedLyrics, hasImportedLyrics, clearLyrics]);
 
   // Debug: Log cues changes
   useEffect(() => {
@@ -308,7 +326,8 @@ export default function LivePage() {
         ar: `Speech Recognition (${selectedLanguage})`,
         by: 'Real-time'
       },
-      cues: lines
+      cues: lines,
+      isImported: false  // This is live transcription, not imported lyrics
     };
     
     console.log('📋 Lyrics data to store:', {
@@ -622,6 +641,25 @@ export default function LivePage() {
             {importedLyrics && importedLyrics.length > 0 ? 'Clear Speech' : 'Clear All'}
           </button>
         )}
+
+        {/* Force reset button for troubleshooting */}
+        <button
+          onClick={() => {
+            console.log('🔥 Force reset triggered');
+            setTranscript('');
+            setInterimText('');
+            setTranscriptWords([]);
+            setCurrentWordIndex(0);
+            setAllFinalTranscripts([]);
+            processedResultsCount.current = 0;
+            lastProcessedCount.current = 0;
+            clearLyrics();
+            console.log('✅ Force reset complete');
+          }}
+          className="rounded-full bg-purple-500/20 px-6 py-2 text-sm hover:bg-purple-500/40 transition-colors"
+        >
+          Force Reset
+        </button>
 
         {transcriptWords.length > 0 && (
           <div className="text-xs text-gray-400">
