@@ -67,11 +67,26 @@ export const useLyricsStore = create(
           processedCuesPreview: processedCues.slice(0, 2)
         });
 
+        const currentState = get();
+        
+        // Determine what to do with imported lyrics based on context
+        let newImportedLyrics, newHasImportedLyrics;
+        
+        if (isImported) {
+          // This is imported content - set the imported lyrics
+          newImportedLyrics = allWords;
+          newHasImportedLyrics = true;
+        } else {
+          // This is live transcription - preserve existing imported lyrics
+          newImportedLyrics = currentState.importedLyrics;
+          newHasImportedLyrics = currentState.hasImportedLyrics;
+        }
+
         set({ 
           meta, 
           cues: processedCues,
-          importedLyrics: isImported ? allWords : null,
-          hasImportedLyrics: isImported  // Only set this flag for actual imported lyrics
+          importedLyrics: newImportedLyrics,
+          hasImportedLyrics: newHasImportedLyrics
         });
         
         console.log('✅ Store updated with processed lyrics');

@@ -155,8 +155,9 @@ export default function LivePage() {
             allWords: updated
           });
           
-          // Check if we have imported lyrics
-          if (importedLyrics && importedLyrics.length > 0) {
+          // Check if we have imported lyrics - use store state directly for production reliability
+          const currentStoreState = useLyricsStore.getState();
+          if (currentStoreState.hasImportedLyrics && currentStoreState.importedLyrics && currentStoreState.importedLyrics.length > 0) {
             console.log('🎵 Using imported lyrics - matching spoken words');
             const match = highlightMatchingWords(updated);
             if (match) {
@@ -237,8 +238,9 @@ export default function LivePage() {
                 // Update states
                 setTranscriptWords(allWords);
                 if (allWords.length > 0) {
-                  // Check if we have imported lyrics
-                  if (importedLyrics && importedLyrics.length > 0) {
+                  // Check if we have imported lyrics - use store state directly for production reliability
+                  const currentStoreState = useLyricsStore.getState();
+                  if (currentStoreState.hasImportedLyrics && currentStoreState.importedLyrics && currentStoreState.importedLyrics.length > 0) {
                     console.log('🎵 Polling: Using imported lyrics - matching spoken words');
                     const match = highlightMatchingWords(allWords);
                     if (match) {
@@ -271,6 +273,15 @@ export default function LivePage() {
 
   /* Convert transcript words into lyrics format and update store */
   const updateLyricsFromTranscript = (words, highlightFromIndex = words.length - 1) => {
+    // Safety check: Don't update if imported lyrics exist (production-safe)
+    const currentStoreState = useLyricsStore.getState();
+    if (currentStoreState.hasImportedLyrics && currentStoreState.importedLyrics && currentStoreState.importedLyrics.length > 0) {
+      if (import.meta.env.DEV) {
+        console.log('🛑 updateLyricsFromTranscript blocked - imported lyrics exist');
+      }
+      return;
+    }
+
     if (import.meta.env.DEV) {
       console.log('🎵 updateLyricsFromTranscript called:', {
         totalWords: words.length,
@@ -293,6 +304,15 @@ export default function LivePage() {
 
   /* Actual lyrics update function (debounced) */
   const performLyricsUpdate = (words, highlightFromIndex) => {
+    // Final safety check: Don't update if imported lyrics exist
+    const currentStoreState = useLyricsStore.getState();
+    if (currentStoreState.hasImportedLyrics && currentStoreState.importedLyrics && currentStoreState.importedLyrics.length > 0) {
+      if (import.meta.env.DEV) {
+        console.log('🛑 performLyricsUpdate blocked - imported lyrics exist');
+      }
+      return;
+    }
+
     // Create lyrics lines (group words by lines, ~8-10 words per line)
     const wordsPerLine = 8;
     const lines = [];
@@ -581,7 +601,7 @@ export default function LivePage() {
       </div>
 
       {/* ─── QUICK STATUS INDICATOR ─── */}
-      <div className="flex items-center gap-2 text-sm text-gray-400 mb-4">
+      <div className="flex items-center gap-2 text-sm text-gray-400 mb-8">
         <div className={`w-2 h-2 rounded-full ${
           isStreaming 
             ? speechDetected 
