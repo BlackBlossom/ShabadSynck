@@ -7,6 +7,7 @@
 */
 
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { WavyBackground } from "../components/WavyBackground";
 
@@ -36,7 +37,7 @@ function Nav() {
                   ${opaque ? "bg-[#121212]/80" : "bg-transparent"}`}
     >
       <nav className="mx-auto flex max-w-[1200px] items-center justify-between px-4 sm:px-6 lg:px-8 py-4">
-        <h1 className="mt-2 flex text-xl sm:text-2xl lg:text-3xl font-qurova items-center space-x-3">
+        <h1 className="mt-2 flex text-xl sm:text-2xl md:text-3xl lg:text-4xl font-qurova items-center space-x-3">
             ShabadSynck
         </h1>
         <a
@@ -73,6 +74,12 @@ function Card({ Icon, title, text, idx }) {
 
 /* ───── PAGE ───── */
 export default function HomePage() {
+  const location = useLocation();
+  
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [location.pathname]);
+
   return (
     <div className="relative min-h-screen font-caldina bg-[#121212] text-white">
       {/*  full-viewport animated waves  */}
