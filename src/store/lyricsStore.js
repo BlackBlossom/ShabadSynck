@@ -1,6 +1,35 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+// Helper function to calculate string similarity (Levenshtein distance based)
+const calculateSimilarity = (str1, str2) => {
+  const len1 = str1.length;
+  const len2 = str2.length;
+  
+  if (len1 === 0) return len2 === 0 ? 1 : 0;
+  if (len2 === 0) return 0;
+  
+  const matrix = Array(len1 + 1).fill().map(() => Array(len2 + 1).fill(0));
+  
+  for (let i = 0; i <= len1; i++) matrix[i][0] = i;
+  for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+  
+  for (let i = 1; i <= len1; i++) {
+    for (let j = 1; j <= len2; j++) {
+      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  
+  const distance = matrix[len1][len2];
+  const maxLen = Math.max(len1, len2);
+  return 1 - (distance / maxLen);
+};
+
 export const useLyricsStore = create(
   persist(
     (set, get) => ({
@@ -95,60 +124,129 @@ export const useLyricsStore = create(
       // Method to find and highlight words based on speech transcription
       highlightMatchingWords: (spokenWords) => {
         const state = get();
-        if (!state.importedLyrics || !spokenWords.length) return;
+        if (!state.hasImportedLyrics || !state.cues.length || !spokenWords.length) return null;
 
         // Convert spoken words to lowercase for matching
-        const spokenLower = spokenWords.map(word => word.toLowerCase());
+        const spokenLower = spokenWords.map(word => word.toLowerCase().replace(/[^\w]/g, ''));
         
-        // Find the best matching sequence in imported lyrics
-        let bestMatch = { lineId: null, wordId: null, matchLength: 0 };
+        // Start from current active position for better karaoke continuity
+        let startCueIndex = 0;
+        let startWordIndex = 0;
         
-        for (let cueIndex = 0; cueIndex < state.cues.length; cueIndex++) {
-          const cue = state.cues[cueIndex];
-          
-          for (let wordIndex = 0; wordIndex < cue.words.length; wordIndex++) {
-            // Try to match from this position
-            let matchLength = 0;
-            let currentCueIndex = cueIndex;
-            let currentWordIndex = wordIndex;
-            
-            for (let spokenIndex = 0; spokenIndex < spokenLower.length; spokenIndex++) {
-              if (currentCueIndex >= state.cues.length) break;
-              
-              const currentCue = state.cues[currentCueIndex];
-              if (currentWordIndex >= currentCue.words.length) {
-                currentCueIndex++;
-                currentWordIndex = 0;
-                continue;
-              }
-              
-              const lyricsWord = currentCue.words[currentWordIndex].text.toLowerCase();
-              const spokenWord = spokenLower[spokenIndex];
-              
-              // Check for exact match or fuzzy match
-              if (lyricsWord === spokenWord || 
-                  lyricsWord.includes(spokenWord) || 
-                  spokenWord.includes(lyricsWord)) {
-                matchLength++;
-                currentWordIndex++;
-              } else {
-                break;
-              }
-            }
-            
-            if (matchLength > bestMatch.matchLength) {
-              bestMatch = {
-                lineId: cueIndex,
-                wordId: cue.words[wordIndex]?.id || null,
-                matchLength
-              };
+        if (state.active.lineId !== null && state.active.wordId !== null) {
+          // Find current position
+          for (let i = 0; i < state.cues.length; i++) {
+            const wordPos = state.cues[i].words.findIndex(w => w.id === state.active.wordId);
+            if (wordPos !== -1) {
+              startCueIndex = i;
+              startWordIndex = Math.max(0, wordPos - 2); // Start a bit before current position
+              break;
             }
           }
         }
         
-        // Set active word if we found a good match
-        if (bestMatch.matchLength > 0) {
+        // Find the best matching position in the lyrics
+        let bestMatch = { lineId: null, wordId: null, matchLength: 0, confidence: 0 };
+        
+        // Search in a range around current position first (for karaoke continuity)
+        const searchRanges = [
+          { start: startCueIndex, end: Math.min(startCueIndex + 3, state.cues.length) }, // Near current
+          { start: 0, end: state.cues.length } // Full search if no good match nearby
+        ];
+        
+        for (const range of searchRanges) {
+          for (let cueIndex = range.start; cueIndex < range.end; cueIndex++) {
+            const cue = state.cues[cueIndex];
+            
+            const searchStart = cueIndex === startCueIndex ? startWordIndex : 0;
+            for (let wordIndex = searchStart; wordIndex < cue.words.length; wordIndex++) {
+              // Try to match spoken words starting from this position in lyrics
+              let matchLength = 0;
+              let currentCueIndex = cueIndex;
+              let currentWordIndex = wordIndex;
+              let exactMatches = 0;
+              let totalWords = 0;
+              
+              for (let spokenIndex = 0; spokenIndex < spokenLower.length; spokenIndex++) {
+                if (currentCueIndex >= state.cues.length) break;
+                
+                const currentCue = state.cues[currentCueIndex];
+                if (currentWordIndex >= currentCue.words.length) {
+                  currentCueIndex++;
+                  currentWordIndex = 0;
+                  if (currentCueIndex >= state.cues.length) break;
+                  continue;
+                }
+                
+                const lyricsWord = currentCue.words[currentWordIndex].text.toLowerCase().replace(/[^\w]/g, '');
+                const spokenWord = spokenLower[spokenIndex];
+                
+                totalWords++;
+                
+                // Check for matches with different levels of confidence
+                let isMatch = false;
+                if (lyricsWord === spokenWord) {
+                  // Exact match - highest confidence
+                  isMatch = true;
+                  exactMatches++;
+                } else if (lyricsWord.length > 2 && spokenWord.length > 2) {
+                  // Fuzzy match for longer words
+                  if (lyricsWord.includes(spokenWord) || spokenWord.includes(lyricsWord)) {
+                    isMatch = true;
+                  } else {
+                    // Check similarity for words that might be misheard
+                    const similarity = calculateSimilarity(lyricsWord, spokenWord);
+                    if (similarity > 0.75) {
+                      isMatch = true;
+                    }
+                  }
+                }
+                
+                if (isMatch) {
+                  matchLength++;
+                  currentWordIndex++;
+                } else {
+                  // For karaoke, be more forgiving - allow skipping short words
+                  if (lyricsWord.length <= 2 || spokenWord.length <= 2) {
+                    currentWordIndex++; // Skip short words that might be articles/prepositions
+                    continue;
+                  }
+                  break;
+                }
+              }
+              
+              // Calculate confidence score with bias towards exact matches
+              const confidence = totalWords > 0 ? 
+                (exactMatches / totalWords) * 0.8 + (matchLength / Math.max(spokenLower.length, totalWords)) * 0.2 : 0;
+              
+              if (matchLength > bestMatch.matchLength || 
+                  (matchLength === bestMatch.matchLength && confidence > bestMatch.confidence)) {
+                
+                // Highlight the word we're currently on (progressive highlighting)
+                const progressIndex = Math.min(wordIndex + matchLength - 1, cue.words.length - 1);
+                
+                bestMatch = {
+                  lineId: cueIndex,
+                  wordId: cue.words[progressIndex]?.id || cue.words[wordIndex]?.id,
+                  matchLength,
+                  confidence,
+                  exactMatches
+                };
+              }
+            }
+          }
+          
+          // If we found a good match in the first range, don't search the full range
+          if (bestMatch.matchLength > 0 && bestMatch.confidence > 0.4) break;
+        }
+        
+        // Set active word if we found a decent match
+        if (bestMatch.matchLength > 0 && bestMatch.confidence > 0.2) {
           set({ active: { lineId: bestMatch.lineId, wordId: bestMatch.wordId } });
+          console.log('🎯 Karaoke highlight:', {
+            ...bestMatch,
+            spokenWords: spokenWords.join(' ')
+          });
           return bestMatch;
         }
         
