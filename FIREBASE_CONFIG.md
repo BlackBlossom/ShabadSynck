@@ -33,4 +33,5 @@ Monitor your deployments:
 
 - Static hosting with global CDN
 - Preview deployments auto-expire in 7 days
-- No server costs - client-side only application with AssemblyAI API
+- No server costs - client-side only application using browser Speech API
+- No external API costs - uses Web Speech API built into browsers

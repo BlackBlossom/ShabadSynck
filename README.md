@@ -1,99 +1,156 @@
 # Live Transcription Tool
 
-A real-time speech-to-text application using React, Firebase, and AssemblyAI API. Supports multiple languages with high accuracy.
+A real-time speech-to-text application using React and react-speech-recognition. Supports multiple languages with karaoke-style word highlighting.
 
 ## 🚀 Features
 
-- **Real-time Speech Recognition** - Live transcription via AssemblyAI streaming API
-- **Multi-language Support** - Multiple languages supported by AssemblyAI
-- **Firebase Hosting** - Static hosting with global CDN
-- **Client-side Processing** - Direct API integration, no server required
+- **Real-time Speech Recognition** - Live transcription using Web Speech API via react-speech-recognition
+- **Multi-language Support** - English, Hindi, and Punjabi language support
+- **Karaoke Mode** - Import lyrics and highlight words as you speak
+- **Live Transcription** - Generate lyrics in real-time from speech
+- **Browser-based** - No API keys or external services required
 - **Responsive Design** - Works on desktop and mobile devices
-- **Enhanced Permissions** - Smart microphone permission handling
+- **Offline Capable** - Speech recognition works without internet (browser-dependent)
 
 ## 🛠️ Development Setup
 
-### Prerequisites
+# ShabadSynck — Live Transcription & Karaoke
 
-- Node.js 22+
-- Firebase CLI
-- AssemblyAI API key
+A lightweight, browser-first live transcription and karaoke tool built with React and the Web Speech API. Import LRC-style lyrics to enable karaoke-style highlighting or use live speech-to-lyrics mode.
 
-### 1. Clone and Install
+---
 
-```bash
+## Quick checklist (what I will cover below)
+- Features
+- Quick start (dev + build)
+- Usage & UX notes (karaoke behavior)
+- Troubleshooting & browser support
+- Privacy, deployment & contribution notes
+
+---
+
+## Features
+
+- Real-time speech-to-text using `react-speech-recognition` (Web Speech API)
+- Karaoke mode: import lyrics (`.lrc`) and get karaoke-style word highlighting as you sing
+- Live-transcription mode: generate lyrics from spoken words in real time
+- Multi-language support (English, Hindi, Punjabi) with language switching
+- Copy/export live lyrics to clipboard
+- Works entirely in the browser — no external transcription API required
+
+---
+
+## Quick start (development)
+
+Prerequisites
+
+- Node.js 18+ (Node 22 recommended)
+- A modern browser with Web Speech API support (Chrome/Edge recommended)
+
+Clone, install, and run:
+
+```powershell
 git clone https://github.com/BlackBlossom/ShabadSynck.git
-cd ShabadSynck
+cd "d:\VS Code\live-transcription-tool"  # or your clone path
 npm install
-```
-
-### 2. Configuration
-
-The application uses AssemblyAI's streaming API with the API key configured in the speech client. For production, you should:
-
-1. Get your AssemblyAI API key from [AssemblyAI Dashboard](https://app.assemblyai.com/)
-2. Replace the API key in `src/api/speechClient.js`
-3. Consider using environment variables for production deployment
-
-### 3. Start Development
-
-```bash
 npm run dev
 ```
 
-This starts the React app on `http://localhost:5173`
+Open: `http://localhost:5173`
 
-## 🔐 Security
+Build for production:
 
-**⚠️ API Key Security:**
+```powershell
+npm run build
+npm run preview   # optional local preview
+```
 
-- For development, the API key is included in the client code
-- For production, consider implementing a backend proxy to hide the API key
-- Monitor API usage in AssemblyAI dashboard
+---
 
-## 🚢 Deployment
+## Usage (how karaoke & live transcription work)
 
-### Automatic Deployment (Recommended)
+1. Grant the browser microphone permission when prompted.
+2. Choose your language via the settings button.
+3. Click the green mic to start listening. Click again to stop.
+4. Optional: Import an `.lrc` file via the **Import Lyrics** button to enable karaoke mode.
 
-1. Add GitHub secrets for Firebase (see `GITHUB_ACTIONS_SETUP.md`)
-2. Push to main branch
-3. GitHub Actions automatically deploys to Firebase Hosting
+Karaoke behavior details
 
-### Manual Deployment
+- When lyrics are imported, the app enters Karaoke Mode. It uses only the current spoken phrase (not the whole transcript) to match and highlight words, so highlighting is immediate and accurate.
+- After a short pause (2s), the transcript resets automatically so the next phrase is matched fresh — this prevents concatenation errors and keeps highlighting in sync.
+- The matching algorithm is fuzzy-aware (handles small mis-hearings) and prioritizes matches near the current highlight for continuous flow.
+- If no imported lyrics are present, the app builds live lyric lines from speech in ~8-word groupings.
 
-```bash
+Tips for best results
+
+- Use Chrome or Edge for the best Web Speech API experience.
+- Pause briefly between lines/phrases in karaoke mode to allow the app to reset and re-sync.
+- Speak clearly and avoid background noise for higher accuracy.
+
+---
+
+## Troubleshooting & Browser support
+
+- Web Speech API has the best support in Chrome/Chromium and Edge.
+- Safari supports speech recognition but behavior/formatting may differ across versions.
+- Firefox has limited or no speech recognition in many versions.
+
+If you see no transcript or the mic refuses to start:
+
+- Check browser microphone permissions.
+- Try a different browser (Chrome recommended).
+- Reload the page and try again.
+
+Known issue: Continuous listening behavior can vary by platform (Chrome on Android may restart the microphone frequently).
+
+---
+
+## Privacy & Security
+
+- All speech recognition is performed by the user's browser (Web Speech API) or any polyfill you configure. No transcription is performed by external services by default.
+- If you configure a polyfill/cloud provider (Azure, etc.), that provider may receive audio for transcription — see polyfill docs before enabling.
+
+---
+
+## Deployment
+
+This project was designed to host on any static hosting (Firebase Hosting, Netlify, Vercel).
+
+Example: build and deploy with Firebase
+
+```powershell
 npm run build
 firebase deploy --only hosting
 ```
 
-## 📁 Project Structure
+For automatic deploys, use GitHub Actions configured in `.github/workflows` (see `GITHUB_ACTIONS_SETUP.md`).
 
-```
-├── src/                    # React frontend
-│   ├── components/         # React components
-│   ├── hooks/             # Custom React hooks
-│   ├── api/               # AssemblyAI client
-│   └── pages/             # Application pages
-└── .github/workflows/    # GitHub Actions for hosting
-```
+---
 
-## 🌐 Live Demo
+## Project layout (important files)
 
-Visit: [https://shabadsynck.web.app](https://shabadsynck.web.app)
+- `src/pages/LivePage.jsx` — main UI and speech logic (karaoke + live transcription)
+- `src/store/lyricsStore.js` — zustand store; handles cues, imported lyrics, and the highlight logic
+- `src/api/speechClient.js` — language mapping utilities
+- `src/components/Lyrics/` — lyrics UI and `LyricsDisplay` component
 
-## 📖 Documentation
+---
 
-- `FIREBASE_CONFIG.md` - Firebase hosting details
-- `GITHUB_ACTIONS_SETUP.md` - CI/CD configuration
+## Contributing
 
-## 🤝 Contributing
+1. Fork the repo
+2. Create a branch (`feat/my-feature`)
+3. Make small, testable commits
+4. Open a pull request describing the change and motivation
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+Please include a brief local repro and any test steps for UI/behavior changes.
 
-## 📄 License
+---
 
-This project is licensed under the MIT License.
+## License
+
+MIT — see `LICENSE` (or add one) for details.
+
+---
+
+If you want, I can also add a short "How karaoke matching works" section with diagrams or examples, or generate a dedicated `CONTRIBUTING.md` and `CHANGELOG.md` next.
