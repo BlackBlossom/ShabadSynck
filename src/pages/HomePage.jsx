@@ -36,9 +36,9 @@ function Nav() {
       className={`fixed inset-x-0 top-0 z-50 backdrop-blur-md transition-colors
                   ${opaque ? "bg-[#121212]/80" : "bg-transparent"}`}
     >
-      <nav className="mx-auto flex max-w-[1200px] items-center justify-between px-4 sm:px-6 lg:px-8 py-4">
+      <nav className="mx-6 flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4">
         <h1 className="mt-2 flex text-xl sm:text-2xl md:text-3xl lg:text-4xl font-qurova items-center space-x-3">
-            ShabadSynck
+            Satnam Amrit
         </h1>
         <a
           href="/live"

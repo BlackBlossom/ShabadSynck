@@ -1,28 +1,11 @@
-# Live Transcription Tool
+# Satnam Amrit — Live Transcription & Karaoke
 
-A real-time speech-to-text application using React and react-speech-recognition. Supports multiple languages with karaoke-style word highlighting.
-
-## 🚀 Features
-
-- **Real-time Speech Recognition** - Live transcription using Web Speech API via react-speech-recognition
-- **Multi-language Support** - English, Hindi, and Punjabi language support
-- **Karaoke Mode** - Import lyrics and highlight words as you speak
-- **Live Transcription** - Generate lyrics in real-time from speech
-- **Browser-based** - No API keys or external services required
-- **Responsive Design** - Works on desktop and mobile devices
-- **Offline Capable** - Speech recognition works without internet (browser-dependent)
-
-## 🛠️ Development Setup
-
-# ShabadSynck — Live Transcription & Karaoke
-
-A lightweight, browser-first live transcription and karaoke tool built with React and the Web Speech API. Import LRC-style lyrics to enable karaoke-style highlighting or use live speech-to-lyrics mode.
-
----
+A real-time speech-to-text application with premium Soniox API support and Web Speech API fallback. Features multi-language support and karaoke-style word highlighting.
 
 ## Quick checklist (what I will cover below)
-- Features
+- Features  
 - Quick start (dev + build)
+- Soniox API setup (optional premium upgrade)
 - Usage & UX notes (karaoke behavior)
 - Troubleshooting & browser support
 - Privacy, deployment & contribution notes
@@ -31,12 +14,117 @@ A lightweight, browser-first live transcription and karaoke tool built with Reac
 
 ## Features
 
-- Real-time speech-to-text using `react-speech-recognition` (Web Speech API)
-- Karaoke mode: import lyrics (`.lrc`) and get karaoke-style word highlighting as you sing
-- Live-transcription mode: generate lyrics from spoken words in real time
-- Multi-language support (English, Hindi, Punjabi) with language switching
-- Copy/export live lyrics to clipboard
-- Works entirely in the browser — no external transcription API required
+- **Dual Speech Recognition**: Premium Soniox WebSocket API with Web Speech API fallback
+- **Real-time transcription**: Ultra-low latency live speech-to-text  
+- **Karaoke mode**: Import lyrics (`.lrc`) and get karaoke-style word highlighting as you sing
+- **Live-transcription mode**: Generate lyrics from spoken words in real time
+- **Multi-language support**: English, Hindi, Punjabi with language switching
+- **Copy/export**: Save live lyrics to clipboard
+- **Smart fallback**: Automatically falls back to Web Speech API if Soniox is unavailable
+- **Browser-based**: Works entirely in the browser, no server required
+
+For detailed Soniox setup instructions, see [SONIOX_SETUP.md](./SONIOX_SETUP.md)
+
+---
+
+- **Dual Speech Recognition**: Premium Soniox WebSocket API with Web Speech API fallback
+- **Real-time transcription**: Ultra-low latency live speech-to-text
+- **Karaoke mode**: Import lyrics (`.lrc`) and get karaoke-style word highlighting as you sing
+- **Live-transcription mode**: Generate lyrics from spoken words in real time
+- **Multi-language support**: English, Hindi, Punjabi with language switching
+- **Copy/export**: Save live lyrics to clipboard
+- **Smart fallback**: Automatically falls back to Web Speech API if Soniox is unavailable
+- **Browser-based**: Works entirely in the browser, no server required
+
+---
+
+## Quick start
+
+### Development setup
+
+```powershell
+# Clone and install
+git clone <your-repo-url>
+cd live-transcription-tool
+npm install
+
+# Optional: Set up Soniox API (premium features)
+cp .env.local.example .env.local
+# Edit .env.local and add your Soniox API key
+
+# Start development server
+npm run dev
+```
+
+**🎯 Premium Upgrade**: For enhanced accuracy and features, see [SONIOX_SETUP.md](./SONIOX_SETUP.md) to configure the Soniox API.
+
+### Production build
+
+```powershell
+npm run build
+```
+
+The built files will be in the `dist` folder, ready for static hosting.
+
+---
+# Clone and install
+git clone <your-repo-url>
+cd live-transcription-tool
+npm install
+
+# Optional: Set up Soniox API (premium features)
+cp .env.local.example .env.local
+# Edit .env.local and add your Soniox API key
+
+# Start development server
+npm run dev
+```
+
+### Production build
+
+```powershell
+npm run build
+```
+
+The built files will be in the `dist` folder, ready for static hosting.
+
+---
+
+## Soniox API Setup (Optional Premium Upgrade)
+
+The app works great with the free Web Speech API, but for enhanced accuracy and features, you can upgrade to Soniox:
+
+### 1. Get a Soniox API Key
+
+1. Visit [Soniox Console](https://console.soniox.com/)
+2. Create an account and get your API key
+3. Copy your API key
+
+### 2. Configure the Environment
+
+```powershell
+# Copy the environment template
+cp .env.local.example .env.local
+
+# Edit .env.local and add your API key:
+# VITE_SONIOX_API_KEY=your_actual_api_key_here
+```
+
+### 3. Restart Development Server
+
+```powershell
+npm run dev
+```
+
+You'll now see "Using Soniox API (Premium)" in the status when recording!
+
+### Soniox Benefits
+
+- **Superior accuracy**: Especially for multi-language and noisy environments
+- **Lower latency**: Real-time WebSocket connection
+- **Advanced features**: Speaker diarization, language identification
+- **Better handling**: Continuous speech and complex scenarios
+- **Automatic fallback**: Still falls back to Web Speech API if needed
 
 ---
 
@@ -50,7 +138,7 @@ Prerequisites
 Clone, install, and run:
 
 ```powershell
-git clone https://github.com/BlackBlossom/ShabadSynck.git
+git clone https://github.com/BlackBlossom/Satnam-Amrit.git
 cd "d:\VS Code\live-transcription-tool"  # or your clone path
 npm install
 npm run dev
