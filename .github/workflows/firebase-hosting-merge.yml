@@ -30,6 +30,7 @@ jobs:
         run: npm run build
         env:
           NODE_ENV: production
+          VITE_SONIOX_API_KEY: ${{ secrets.VITE_SONIOX_API_KEY }}
       
       # Deploy Hosting using Firebase Action
       - name: Deploy to Firebase Hosting
