@@ -4,14 +4,13 @@ import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faMicrophone, faMicrophoneSlash, faCog, faCopy } from '@fortawesome/free-solid-svg-icons';
-import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 
 import ImportLyricsModal from "../components/Lyrics/ImportLyricsModal";
 import LyricsDisplay from "../components/Lyrics/LyricsDisplay";
 
 import useImportedLyrics from "../hooks/useImportedLyrics";
+import useSpeechStream from "../hooks/useSpeechStream";
 import { useLyricsStore } from "../store/lyricsStore";
-import { getMappedLanguage } from "../api/speechClient";
 
 export default function LivePage() {
   /* lyrics store */
@@ -21,12 +20,13 @@ export default function LivePage() {
   const loadLrc = useLyricsStore((s) => s.loadLrc);
   const clearLyrics = useLyricsStore((s) => s.clear);
   const highlightMatchingWords = useLyricsStore((s) => s.highlightMatchingWords);
+  const addToTranscriptHistory = useLyricsStore((s) => s.addToTranscriptHistory);
   const importedLyrics = useLyricsStore((s) => s.importedLyrics);
   const hasImportedLyrics = useLyricsStore((s) => s.hasImportedLyrics);
 
   /* UI state */
   const [modalOpen, setModalOpen] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState('english');
+  const [selectedLanguage, setSelectedLanguage] = useState('punjabi'); // Default to Punjabi for Kirtan/Bhajan
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [currentPhrase, setCurrentPhrase] = useState('');
@@ -34,17 +34,31 @@ export default function LivePage() {
 
   // Refs for karaoke timing
   const lastTranscriptRef = useRef('');
+  const lastProcessedFinalRef = useRef(''); // Track last processed final transcript
   const pauseTimeoutRef = useRef(null);
   const lastSpeechTimeRef = useRef(Date.now());
 
-  // Use react-speech-recognition directly - simple approach like the sample
+  // Use unified speech recognition hook
   const {
-    transcript,
-    listening,
+    startListening,
+    stopListening,
     resetTranscript,
+    setLanguage: setSpeechLanguage,
+    isListening,
+    transcript, // Interim transcript
+    finalTranscript, // Accumulated final transcript
+    currentLanguages, // Detected languages
+    provider,
+    isConnected,
+    error: speechError,
     browserSupportsSpeechRecognition,
-    isMicrophoneAvailable
-  } = useSpeechRecognition();
+    isMicrophoneAvailable,
+    isUsingSoniox,
+    isUsingWebSpeech
+  } = useSpeechStream({
+    language: selectedLanguage,
+    context: hasImportedLyrics ? importedLyrics : ''
+  });
 
   const languages = [
     { code: 'english', name: 'English', flag: '🇺🇸' },
@@ -55,11 +69,8 @@ export default function LivePage() {
   /* hooks */
   const { importFile } = useImportedLyrics();
 
-  // Simple start listening function like the sample
-  const startListening = () => SpeechRecognition.startListening({ 
-    continuous: true, 
-    language: getMappedLanguage(selectedLanguage) 
-  });
+  // Simple start listening function using the new unified hook
+  const startSpeechRecognition = () => startListening(selectedLanguage);
 
   useEffect(() => {
     // reset everything on re-render
@@ -67,40 +78,61 @@ export default function LivePage() {
     clearLyrics();
     setCurrentPhrase('');
     lastTranscriptRef.current = '';
+    lastProcessedFinalRef.current = '';
     setLastActivePosition({ lineId: null, wordId: null });
   }, []);
 
-  // Enhanced karaoke-style transcript processing
+  // Enhanced karaoke-style transcript processing with final transcript tracking
   useEffect(() => {
-    if (!listening) return;
+    if (!isListening) return;
 
-    if (transcript) {
+    // Combine final transcript with current interim for processing
+    const combinedTranscript = finalTranscript + (transcript ? (finalTranscript ? ' ' : '') + transcript : '');
+
+    if (combinedTranscript) {
       lastSpeechTimeRef.current = Date.now();
       
       if (hasImportedLyrics) {
-        // Real karaoke mode: process current phrase only
-        handleKaraokeTranscript(transcript);
+        // Real karaoke mode: 
+        // - Use final transcript for matching (more accurate)
+        // - Use interim for real-time preview but don't match on it
+        if (finalTranscript && finalTranscript.trim() !== lastProcessedFinalRef.current) {
+          console.log('🎯 Processing final transcript for karaoke matching:', finalTranscript);
+          
+          // Add to transcript history for context tracking
+          addToTranscriptHistory(finalTranscript);
+          
+          // Use final transcript for accurate matching
+          handleKaraokeTranscript(finalTranscript, true); // true = isFinalTranscript
+          lastProcessedFinalRef.current = finalTranscript.trim();
+        }
+        
+        // Always show current interim for real-time feedback (but don't match on it)
+        if (transcript) {
+          setCurrentPhrase(transcript);
+        }
       } else {
-        // Live transcription mode: accumulate transcript
-        handleLiveTranscript(transcript);
+        // Live transcription mode: use accumulated transcript
+        handleLiveTranscript(combinedTranscript);
       }
     }
 
-    // Set up pause detection for karaoke mode
-    if (hasImportedLyrics) {
+    // Set up pause detection for karaoke mode (only if actively listening)
+    if (hasImportedLyrics && isListening) {
       if (pauseTimeoutRef.current) {
         clearTimeout(pauseTimeoutRef.current);
       }
       
       pauseTimeoutRef.current = setTimeout(() => {
-        // Reset transcript after 2 seconds of pause for better karaoke matching
-        if (Date.now() - lastSpeechTimeRef.current > 2000) {
-          console.log('🎤 Karaoke pause detected - resetting transcript');
+        // Only reset if we're still listening and there's been a real pause
+        if (isListening && Date.now() - lastSpeechTimeRef.current > 4000) {
+          console.log('🎤 Karaoke long pause detected - resetting transcript');
           resetTranscript();
           setCurrentPhrase('');
           lastTranscriptRef.current = '';
+          lastProcessedFinalRef.current = '';
         }
-      }, 2000);
+      }, 5000); // Increased to 5 seconds to be less aggressive
     }
 
     return () => {
@@ -108,40 +140,46 @@ export default function LivePage() {
         clearTimeout(pauseTimeoutRef.current);
       }
     };
-  }, [transcript, listening, hasImportedLyrics]);
+  }, [transcript, isListening, hasImportedLyrics]);
 
-  // Handle karaoke-style transcript processing
-  const handleKaraokeTranscript = (newTranscript) => {
-    // In karaoke mode, we want to match the current phrase, not accumulated text
+  // Enhanced karaoke-style transcript processing with context tracking
+  const handleKaraokeTranscript = (newTranscript, isFinalTranscript = false) => {
     const cleanTranscript = newTranscript.trim();
     
-    if (cleanTranscript && cleanTranscript !== lastTranscriptRef.current) {
-      setCurrentPhrase(cleanTranscript);
-      
-      // Extract just the new words spoken since last update
-      const currentWords = cleanTranscript.split(/\s+/).filter(word => word.length > 0);
-      
-      // For better karaoke experience, we can either:
-      // 1. Match the entire current phrase, or 
-      // 2. Match just the most recent words
-      
-      // Let's use the last few words for more responsive highlighting
-      const recentWords = currentWords.slice(-3); // Last 3 words for better responsiveness
-      
-      console.log('🎤 Karaoke matching:', { 
-        full: currentWords, 
-        recent: recentWords,
-        transcript: cleanTranscript 
-      });
-      
-      const matchResult = highlightMatchingWords(recentWords);
-      
-      // If no match with recent words, try with all current words
-      if (!matchResult || matchResult.matchLength === 0) {
-        highlightMatchingWords(currentWords);
+    if (cleanTranscript && (isFinalTranscript || cleanTranscript !== lastTranscriptRef.current)) {
+      if (!isFinalTranscript) {
+        // For interim transcripts, just update the display
+        setCurrentPhrase(cleanTranscript);
+      } else {
+        // For final transcripts, do the actual matching
+        setCurrentPhrase(cleanTranscript);
+        
+        // Extract words for matching
+        const currentWords = cleanTranscript.split(/\s+/).filter(word => word.length > 0);
+        
+        // Enhanced matching strategy for repeated lines and context
+        console.log('🎤 Enhanced karaoke matching (FINAL):', { 
+          words: currentWords, 
+          transcript: cleanTranscript,
+          isFinal: isFinalTranscript
+        });
+        
+        // Use the enhanced matching with context and repeated line detection
+        const matchResult = highlightMatchingWords(currentWords, isFinalTranscript);
+        
+        if (!matchResult || matchResult.confidence < 0.3) {
+          console.log('⚠️ No good match found, trying with last few words only');
+          // If no good match, try with just the last few words (might be end of a line)
+          const lastWords = currentWords.slice(-2);
+          if (lastWords.length > 0) {
+            highlightMatchingWords(lastWords, isFinalTranscript);
+          }
+        }
       }
       
-      lastTranscriptRef.current = cleanTranscript;
+      if (!isFinalTranscript) {
+        lastTranscriptRef.current = cleanTranscript;
+      }
     }
   };
 
@@ -187,20 +225,12 @@ export default function LivePage() {
   };
 
   /* Handle language change */
-  const handleLanguageChange = (languageCode) => {
+  const handleLanguageChange = async (languageCode) => {
     setSelectedLanguage(languageCode);
     setShowLanguageSelector(false);
     
-    // If currently listening, restart with new language
-    if (listening) {
-      SpeechRecognition.stopListening();
-      setTimeout(() => {
-        SpeechRecognition.startListening({ 
-          continuous: true,
-          language: getMappedLanguage(languageCode)
-        });
-      }, 100);
-    }
+    // Update speech language using the unified hook
+    await setSpeechLanguage(languageCode);
   };
 
   /* Simple copy function like the sample approach */
@@ -228,27 +258,32 @@ export default function LivePage() {
     }
   };
 
-  /* Toggle microphone - simple approach */
+  /* Toggle microphone using unified hook */
   const toggleMic = () => {
-    if (listening) {
-      SpeechRecognition.stopListening();
+    if (isListening) {
+      stopListening();
     } else {
-      startListening();
+      startSpeechRecognition();
     }
   };
 
   /* Get status display text */
   const getStatusDisplay = () => {
+    if (speechError) return `Error: ${speechError.message}`;
     if (!browserSupportsSpeechRecognition) return 'Browser does not support speech recognition - Please use Chrome, Edge, or Safari';
     if (isMicrophoneAvailable === false) return 'Microphone access denied - Click to check permission';
-    if (listening) return 'Recording...';
+    if (isListening) {
+      const providerName = isUsingSoniox ? 'Soniox' : 'Web Speech API';
+      return `Recording with ${providerName}...`;
+    }
     return 'Click to start recording';
   };
 
   /* Get status color */
   const getStatusColor = () => {
+    if (speechError) return 'text-red-400';
     if (!browserSupportsSpeechRecognition || isMicrophoneAvailable === false) return 'text-red-400';
-    if (listening) return 'text-[#1DB954]';
+    if (isListening) return 'text-[#1DB954]';
     return 'text-gray-400';
   };
 
@@ -262,6 +297,12 @@ export default function LivePage() {
         <p className={`text-sm font-medium ${getStatusColor()}`}>
           {getStatusDisplay()}
         </p>
+        {provider && (
+          <p className="text-xs text-blue-400">
+            Using {isUsingSoniox ? 'Soniox API' : 'Web Speech API'} 
+            {isUsingSoniox && ' (Premium)'}
+          </p>
+        )}
         {isMicrophoneAvailable === false && (
           <p className="text-xs text-yellow-400">
             💡 Enable microphone in browser settings and refresh the page
@@ -311,10 +352,10 @@ export default function LivePage() {
       {/* ─── QUICK STATUS INDICATOR ─── */}
       <div className="flex items-center gap-2 text-sm text-gray-400 mb-8">
         <div className={`w-2 h-2 rounded-full ${
-          listening ? 'bg-[#1DB954] animate-pulse' : 'bg-gray-500'
+          isListening ? 'bg-[#1DB954] animate-pulse' : 'bg-gray-500'
         }`}></div>
         <span>
-          {listening 
+          {isListening 
             ? `Recording (${languages.find(lang => lang.code === selectedLanguage)?.name})`
             : 'Ready to record'
           }
@@ -326,17 +367,17 @@ export default function LivePage() {
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          aria-label={listening ? "Stop recording" : "Start recording"}
+          aria-label={isListening ? "Stop recording" : "Start recording"}
           onClick={toggleMic}
           className={`relative z-10 flex h-24 w-24 items-center justify-center rounded-full transition-all duration-300 ${
-            listening 
+            isListening 
               ? "bg-[#1DB954] shadow-lg shadow-[#1DB954]/50" 
               : (!browserSupportsSpeechRecognition || isMicrophoneAvailable === false)
               ? "bg-red-500/20 hover:bg-red-500/40 border-2 border-red-500/50"
               : "bg-[#1A1A1A] hover:bg-[#2A2A2A]"
           } cursor-pointer`}
         >
-          {listening ? (
+          {isListening ? (
             <FontAwesomeIcon icon={faMicrophone} className="h-8 w-8 text-white" />
           ) : (!browserSupportsSpeechRecognition || isMicrophoneAvailable === false) ? (
             <FontAwesomeIcon icon={faMicrophoneSlash} className="h-8 w-8 text-red-400" />
@@ -392,7 +433,7 @@ export default function LivePage() {
           <div className="mt-2 text-xs text-gray-400">
             {transcript.split(/\s+/).filter(word => word.length > 0).length} words
             {hasImportedLyrics ? 
-              ` • Karaoke mode active • ${listening ? 'Listening for matches' : 'Paused'}` : 
+              ` • Karaoke mode active • ${isListening ? 'Listening for matches' : 'Paused'}` : 
               ` • Live transcription`
             }
           </div>
@@ -404,7 +445,7 @@ export default function LivePage() {
           </div>
         )}
 
-        {hasImportedLyrics && listening && !transcript && (
+        {hasImportedLyrics && isListening && !transcript && (
           <div className="mt-2 text-xs text-yellow-400 animate-pulse">
             🎤 Ready for karaoke • Speak or sing to see live highlighting
           </div>
@@ -421,7 +462,7 @@ export default function LivePage() {
               </h2>
               <div className="flex items-center justify-center space-x-4 text-xs text-gray-400 mb-4">
                 <span>{hasImportedLyrics ? 'Karaoke Mode' : 'Live Transcription'}</span>
-                {listening && (
+                {isListening && (
                   <>
                     <span>•</span>
                     <div className="flex items-center space-x-1">
@@ -445,7 +486,7 @@ export default function LivePage() {
             ) : null}
             
             {/* Show current phrase for karaoke mode */}
-            {hasImportedLyrics && listening && (
+            {hasImportedLyrics && isListening && (
               <div className="mt-6 p-4 bg-[#1A1A1A] rounded-lg border border-[#1DB954]/30">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-xs text-gray-400">🎤 Current phrase:</div>

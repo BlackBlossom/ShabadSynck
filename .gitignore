@@ -40,3 +40,6 @@ server/keys/*.json
 .firebase/
 firebase-debug.log
 firebase-debug.*.log
+
+# MD
+*.md
